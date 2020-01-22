@@ -15,10 +15,15 @@ mongoose.connect("mongodb://localhost/leboncoin", {
   useUnifiedTopology: true,
   useCreateIndex: true
 });
-// on récupère les routes
+
+// on récupère les routes user
 const userRoutes = require("./routes/user");
-// on déclare des
+// on lance l'utilisation par notre app
 app.use(userRoutes);
+// on récupère les routes
+const userOffers = require("./routes/offer");
+// on déclare des
+app.use(userOffers);
 
 // on déclare la route all
 app.all("*", (req, res) => {
