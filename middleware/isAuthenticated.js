@@ -1,7 +1,8 @@
-const User = require("../models/User");
+const User = require("../models/User"); // Car on va chercher dans User si le token envoyé appartient à un user
 
+// paramètre req, res et next fourni par express
 const isAuthenticated = async (req, res, next) => {
-  // si le champ authorisation du headers n'est pas vide (si vide même pas de token transmis)
+  // si le champ authorisation du headers n'est pas vide (car si vide on sait déjà qu'il n'y a pas de token transmis)
   if (req.headers.authorization) {
     // je récupère le token transmis par l'utilisateur (via cookie) sans le "Bearer "
     const reqToken = req.headers.authorization.replace("Bearer ", "");

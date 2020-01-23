@@ -1,3 +1,6 @@
+// on récupère les variables d'environnement
+require("dotenv").config();
+
 // on charge les librairires
 const express = require("express"); // chargement du paquet pour créer mon serveur
 const expressFormidable = require("express-formidable"); // chargement du paquet qui permet de manipuler les posts
@@ -10,7 +13,7 @@ const app = express();
 app.use(expressFormidable());
 
 // on se connecte à la base de donnée (qu'on crée également pour l'occasion)
-mongoose.connect("mongodb://localhost/leboncoin", {
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
   useCreateIndex: true
@@ -31,6 +34,6 @@ app.all("*", (req, res) => {
 });
 
 // on lance l'écoute du serveur
-app.listen(3000, () => {
+app.listen(process.env.PORT, () => {
   console.log("Serveur Leboncoin démarré");
 });

@@ -3,10 +3,10 @@ const mongoose = require("mongoose");
 
 // Je déclare mon model Offer
 const Offer = mongoose.model("Offer", {
-  title: String,
+  title: String, // CORRECTION : on peut rajouter minlength, maxlength et required
   description: String,
-  price: Number,
-  created: Date,
+  price: Number, // CORRECTION : min et max pour number
+  created: Date, // CORRECTION : Date.now
   creator: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
 });
 
