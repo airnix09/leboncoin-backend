@@ -28,6 +28,10 @@ const userOffers = require("./routes/offer");
 // on déclare des
 app.use(userOffers);
 
+app.get("/", (req, res) => {
+  res.status(200).send("Bonjour sur Leboncoin like");
+});
+
 // on déclare la route all
 app.all("*", (req, res) => {
   res.statuts(400).json({ error: { message: "Page not found" } });
