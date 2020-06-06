@@ -1,60 +1,78 @@
-// on charge les paquets utilisés pour les routes vers offer
+// recover the environment variables
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
-// on récupère router d'express
+const cloudinary = require("cloudinary");
+// retrieve routes from the router module
 const router = express.Router();
 
-// On récupère le model Offer qu'on manipule ici
+// configure cloudinary
+cloudinary.config({
+  cloud_name: "airnix",
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// get Offer model
 const Offer = require("../models/Offer");
-// On récupère le middleware
+// get Middleware to check if a user is logged in
 const isAuthenticated = require("../middleware/isAuthenticated");
 
-// Déclaration de la route /offer/publish
 router.post("/offer/publish", isAuthenticated, async (req, res) => {
   try {
     // Destructuring
     const reqTitle = req.fields.title;
     const reqDescription = req.fields.description;
     const reqPrice = req.fields.price;
+    const reqPictures = req.files.pictures;
+
+    // sending the offer image to cloudinary
+    let picture_url = "";
+    await cloudinary.v2.uploader.upload(reqPictures.path, (error, result) => {
+      if (error) {
+        return res.status(400).json({ message: "Upload Error" });
+      } else {
+        picture_url = result.secure_url;
+      }
+    });
 
     if (
       reqDescription.length <= 500 &&
       reqTitle.length <= 50 &&
       reqPrice <= 100000
     ) {
-      // on crée la requête pour créer le nouvel objet qu'on passe à Offer
-      // on peut délarer ailleurs l'objet et le passer en paramètre d'Offer
+      // create the new offer
       const newOffer = new Offer({
         title: reqTitle,
         description: reqDescription,
         price: reqPrice,
-        created: new Date(), // Si date par défaut now en base, il n'y a pas besoin de l'envoyer
-        creator: req.currentUser
+        pictures: [picture_url],
+        created: new Date(),
+        creator: req.currentUser,
       });
-
-      // on enregistre en base
       await newOffer.save();
 
-      // on retourne la réponse à l'utilisateur
+      // return the result to the API user
       res.status(200).json({
         _id: newOffer._id,
         title: newOffer.title,
         description: newOffer.description,
         price: newOffer.price,
+        pictures: newOffer.pictures,
         created: newOffer.created,
         creator: {
-          // on peut direct faire = account : newOffer.creator.account
           account: {
             username: newOffer.creator.account.username,
-            phone: newOffer.creator.account.phone
+            phone: newOffer.creator.account.phone,
           },
-          _id: newOffer.creator._id
-        }
+          _id: newOffer.creator._id,
+        },
       });
     } else {
       res.status(400).json({
         message:
-          "Description : 500 caractères maximum, Titre : 50 caractères max, Prix : 100000 max"
+          "Description : 500 caractères maximum, Titre : 50 caractères max, Prix : 100000 max",
       });
     }
   } catch (error) {
@@ -62,24 +80,21 @@ router.post("/offer/publish", isAuthenticated, async (req, res) => {
   }
 });
 
-// Déclaration fonction qui retourne un objet servant à filter les résultats d'un find
-const createFilter = req => {
+// function that prepares the mongodb filter
+const createFilter = (req) => {
   // Destructuring
   const reqTitle = req.query.title;
   const reqPriceMax = req.query.priceMax;
   const reqPriceMin = req.query.priceMin;
 
-  // Objet manipulé qui sera utilisé dans find
+  // object that will be used in mongodb research
   let filter = {};
 
-  // On fait évoluer filter en fonction de ce que contient req
-  // si le titre est demandé
+  // We make filter evolve according to what req contains
   if (reqTitle) {
-    filter.title = new RegExp(reqTitle, "i"); // RegExp permet d'envoyer juste un bout (play) et "i" le rend insensible à la casse
+    filter.title = new RegExp(reqTitle, "i");
   }
-  // Si une limit min ou max de prix est demandé
   if (reqPriceMin || reqPriceMax) {
-    // je défini une clé price avec un objet vide
     filter.price = {};
   }
   if (reqPriceMax) {
@@ -89,38 +104,34 @@ const createFilter = req => {
     filter.price.$gte = reqPriceMin;
   }
 
-  // on retourne l'objet filter
   return filter;
 };
 
-// Déclaration de la route /offer/with-count
 router.get("/offer/with-count", async (req, res) => {
   try {
     // Destructuring
-    const reqPage = req.query.page;
+    const reqPage = req.query.page; // pas de page demandé par le frontend mais skip et limit
+    const reqSkip = Number(req.query.skip); // on transforme en chiffre la valeur reçue qui est lui est reçu en string
+    const reqLimit = Number(req.query.limit);
     const reqSort = req.query.sort;
 
-    // on va mettre la requête (req) dans une fonction qui lui rajoutera dans un objet l'ensemble des query de filtre qu'il aura vu.
-    // le résultat sera transmis à find. find peut faire un filtre de sa recherche (sur le titre, le prix) avec un paramètre objet
+    // use of the function that creates the object used in mongodb search
     const filter = createFilter(req);
 
-    // on initie la requête de recherche
+    // prepare the research
     const offers = Offer.find(filter)
-      .populate("creator", "account email") // on filtre avec un 2ème argument le populate (affiche _id toujours)
-      .select("-__v"); // on enlève dans le retour le __v (on précisant - le champ à enlever : directement derrière)
+      .populate("creator", "account email")
+      .select("-__v");
 
-    // si on demande de paginer (reqPage n'est pas vide)
+    // order or filter the result according to the API request
     if (reqPage) {
-      // on rajoute la pagination (on fixe ici le nombre de réponse par page)
-      const limitePage = 3;
-      // on affiche un nombre limité de page (avec .limit) et on affiche à partir d'un certain nombre (avec .skip)
-      // on enlève à chaque fois 0, 3, 6, 9 (multiple de la limite et de la page décalé de 1)
+      const limitePage = 10;
       offers.limit(limitePage).skip(limitePage * (reqPage - 1));
     }
-
-    // si on demande de trier (prix croissant/décroissant ou date croissant/décroissant)
+    if (reqSkip !== NaN && reqLimit !== NaN) {
+      offers.limit(reqLimit).skip(reqSkip);
+    }
     if (reqSort) {
-      // Si on demande par prix-descendant
       if (reqSort === "price-desc") {
         offers.sort({ price: -1 });
       }
@@ -135,34 +146,35 @@ router.get("/offer/with-count", async (req, res) => {
       }
     }
 
-    // on lance la requête : "await offers" lance la requête ( c'est comme si c'était le lancement  d'une fonction).
-    // il faut stocker son résultat dans une variable.
+    // launch the research
     const search = await offers;
 
-    // on retourne à l'utilisateur le résultat de la recherche
+    // launch a second search to obtain the total number of offers in the database
+    const allOffers = Offer.find();
+    const searchCount = await allOffers;
+
+    // return the result to the API user
     res.status(200).json({
-      count: search.length,
-      offers: search
+      count: searchCount.length,
+      offers: search,
     });
-  } catch (error) {
-    console.log({ message: error.message });
-  }
-});
-
-// Déclaration de la route /offer
-router.get("/offer/:id", async (req, res) => {
-  try {
-    // on lance la recherche de l'id de l'objet demandé
-    const offer = await Offer.findById(req.params.id)
-      .populate("creator", "account")
-      .select("-__v");
-
-    // on affiche l'objet à l'utilisateur
-    res.status(400).json(offer);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
-// On exporte les routes (router)
+router.get("/offer/:id", async (req, res) => {
+  try {
+    // launch the offer research using his ID
+    const offer = await Offer.findById(req.params.id)
+      .populate("creator", "account")
+      .select("-__v");
+
+    // return the result to the API user
+    res.status(200).json(offer);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 module.exports = router;

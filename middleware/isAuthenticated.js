@@ -14,7 +14,7 @@ const isAuthenticated = async (req, res, next) => {
       res.status(400).json({ error: { message: "Unauthorized" } });
     } else {
       // Je transmet à la route l'utilisateur trouvé
-      req.currentUser = currentUser;
+      req.currentUser = currentUser; // via l'ajout d'une clé dans req
       // Je rend la main à la route appellante
       return next();
     }
